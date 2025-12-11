@@ -1,0 +1,387 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  CUSTOMER
+  RESTAURANT_OWNER
+  DELIVERY_PARTNER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum AddressType {
+  HOME
+  WORK
+  OTHER
+}
+
+enum CuisineType {
+  INDIAN
+  CHINESE
+  ITALIAN
+  MEXICAN
+  AMERICAN
+  MULTI_CUISINE
+}
+
+enum RestaurantStatus {
+  ACTIVE
+  INACTIVE
+  TEMPORARILY_CLOSED
+}
+
+enum FoodType {
+  VEG
+  NON_VEG
+  VEGAN
+  EGGETARIAN
+}
+
+enum SpiceLevel {
+  MILD
+  MEDIUM
+  HOT
+  EXTRA_HOT
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  PICKED_UP
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+  WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum ReviewType {
+  RESTAURANT
+  MENU_ITEM
+  DELIVERY
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FLAT
+}
+
+enum CouponStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
+enum CouponApplicability {
+  ALL
+  SPECIFIC_RESTAURANTS
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model User {
+  id         Int        @id @default(autoincrement())
+  name       String     @db.VarChar(255)
+  email      String     @unique @db.VarChar(255)
+  phone      String     @db.VarChar(20)
+  role       UserRole   @default(CUSTOMER)
+  status     UserStatus @default(ACTIVE)
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+
+  // Relationships
+  addresses            Address[]
+  orders               Order[]                  @relation("UserOrders")
+  restaurants          Restaurant[]             @relation("RestaurantOwner")
+  deliveries           Order[]                  @relation("DeliveryPartner")
+  reviews              Review[]
+  favorite_restaurants UserFavoriteRestaurant[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Address {
+  id            Int         @id @default(autoincrement())
+  user_id       Int
+  address_line1 String      @db.VarChar(255)
+  address_line2 String?     @db.VarChar(255)
+  city          String      @db.VarChar(100)
+  state         String      @db.VarChar(100)
+  pincode       String      @db.VarChar(10)
+  latitude      Decimal     @db.Decimal(10, 8)
+  longitude     Decimal     @db.Decimal(11, 8)
+  address_type  AddressType @default(HOME)
+  is_default    Boolean     @default(false)
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
+
+  // Relationships
+  user   User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([user_id])
+  @@index([city])
+  @@map("addresses")
+}
+
+model Restaurant {
+  id            Int              @id @default(autoincrement())
+  owner_id      Int
+  name          String           @db.VarChar(255)
+  description   String           @db.Text
+  address       String           @db.VarChar(255)
+  city          String           @db.VarChar(100)
+  state         String           @db.VarChar(100)
+  pincode       String           @db.VarChar(10)
+  latitude      Decimal          @db.Decimal(10, 8)
+  longitude     Decimal          @db.Decimal(11, 8)
+  phone         String           @db.VarChar(20)
+  email         String           @db.VarChar(255)
+  cuisine_type  CuisineType
+  status        RestaurantStatus @default(ACTIVE)
+  rating        Decimal          @default(0) @db.Decimal(3, 2)
+  total_reviews Int              @default(0)
+  opening_time  String           @db.VarChar(10)
+  closing_time  String           @db.VarChar(10)
+  is_pure_veg   Boolean          @default(false)
+  delivery_time Int
+  cost_for_two  Decimal          @db.Decimal(10, 2)
+  created_at    DateTime         @default(now())
+  updated_at    DateTime         @updatedAt
+
+  // Relationships
+  owner              User                     @relation("RestaurantOwner", fields: [owner_id], references: [id], onDelete: Cascade)
+  menu_items         MenuItem[]
+  orders             Order[]
+  reviews            Review[]
+  favorited_by       UserFavoriteRestaurant[]
+  coupon_restaurants CouponRestaurant[]
+
+  @@index([owner_id])
+  @@index([city])
+  @@index([cuisine_type])
+  @@index([status])
+  @@index([is_pure_veg])
+  @@index([rating])
+  @@map("restaurants")
+}
+
+model MenuCategory {
+  id            Int      @id @default(autoincrement())
+  name          String   @db.VarChar(100)
+  description   String?  @db.Text
+  display_order Int
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  // Relationships
+  menu_items MenuItem[]
+
+  @@index([display_order])
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id               Int         @id @default(autoincrement())
+  restaurant_id    Int
+  category_id      Int
+  name             String      @db.VarChar(255)
+  description      String      @db.Text
+  price            Decimal     @db.Decimal(10, 2)
+  discount_price   Decimal?    @db.Decimal(10, 2)
+  food_type        FoodType
+  is_available     Boolean     @default(true)
+  is_recommended   Boolean     @default(false)
+  preparation_time Int
+  calories         Int?
+  spice_level      SpiceLevel?
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  // Relationships
+  restaurant  Restaurant   @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  category    MenuCategory @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  order_items OrderItem[]
+  reviews     Review[]
+
+  @@index([restaurant_id])
+  @@index([category_id])
+  @@index([food_type])
+  @@index([is_available])
+  @@index([price])
+  @@map("menu_items")
+}
+
+model Order {
+  id                      Int           @id @default(autoincrement())
+  user_id                 Int
+  restaurant_id           Int
+  delivery_partner_id     Int?
+  address_id              Int
+  order_number            String        @unique @db.VarChar(50)
+  status                  OrderStatus   @default(PENDING)
+  subtotal                Decimal       @db.Decimal(10, 2)
+  delivery_fee            Decimal       @db.Decimal(10, 2)
+  tax                     Decimal       @db.Decimal(10, 2)
+  discount                Decimal       @default(0) @db.Decimal(10, 2)
+  total_amount            Decimal       @db.Decimal(10, 2)
+  payment_method          PaymentMethod
+  payment_status          PaymentStatus @default(PENDING)
+  estimated_delivery_time DateTime
+  actual_delivery_time    DateTime?
+  special_instructions    String?       @db.Text
+  created_at              DateTime      @default(now())
+  updated_at              DateTime      @updatedAt
+
+  // Relationships
+  user             User        @relation("UserOrders", fields: [user_id], references: [id], onDelete: Cascade)
+  restaurant       Restaurant  @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  delivery_partner User?       @relation("DeliveryPartner", fields: [delivery_partner_id], references: [id], onDelete: SetNull)
+  address          Address     @relation(fields: [address_id], references: [id], onDelete: Cascade)
+  order_items      OrderItem[]
+  reviews          Review[]
+
+  @@index([user_id])
+  @@index([restaurant_id])
+  @@index([delivery_partner_id])
+  @@index([status])
+  @@index([payment_status])
+  @@index([created_at])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                   Int      @id @default(autoincrement())
+  order_id             Int
+  menu_item_id         Int
+  quantity             Int
+  price                Decimal  @db.Decimal(10, 2)
+  special_instructions String?  @db.Text
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  // Relationships
+  order     Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  menu_item MenuItem @relation(fields: [menu_item_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
+  @@index([menu_item_id])
+  @@map("order_items")
+}
+
+model Review {
+  id            Int        @id @default(autoincrement())
+  user_id       Int
+  restaurant_id Int?
+  menu_item_id  Int?
+  order_id      Int
+  rating        Int
+  comment       String?    @db.Text
+  review_type   ReviewType
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+
+  // Relationships
+  user       User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  restaurant Restaurant? @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  menu_item  MenuItem?   @relation(fields: [menu_item_id], references: [id], onDelete: Cascade)
+  order      Order       @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([restaurant_id])
+  @@index([menu_item_id])
+  @@index([order_id])
+  @@index([rating])
+  @@map("reviews")
+}
+
+model UserFavoriteRestaurant {
+  id            Int      @id @default(autoincrement())
+  user_id       Int
+  restaurant_id Int
+  created_at    DateTime @default(now())
+
+  // Relationships
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, restaurant_id])
+  @@index([user_id])
+  @@index([restaurant_id])
+  @@map("user_favorite_restaurants")
+}
+
+model Coupon {
+  id                  Int                 @id @default(autoincrement())
+  code                String              @unique @db.VarChar(50)
+  description         String              @db.Text
+  discount_type       DiscountType
+  discount_value      Decimal             @db.Decimal(10, 2)
+  min_order_amount    Decimal             @db.Decimal(10, 2)
+  max_discount_amount Decimal?            @db.Decimal(10, 2)
+  valid_from          DateTime
+  valid_till          DateTime
+  usage_limit         Int?
+  used_count          Int                 @default(0)
+  status              CouponStatus        @default(ACTIVE)
+  applicable_to       CouponApplicability
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+
+  // Relationships
+  coupon_restaurants CouponRestaurant[]
+
+  @@index([code])
+  @@index([status])
+  @@map("coupons")
+}
+
+model CouponRestaurant {
+  id            Int      @id @default(autoincrement())
+  coupon_id     Int
+  restaurant_id Int
+  created_at    DateTime @default(now())
+
+  // Relationships
+  coupon     Coupon     @relation(fields: [coupon_id], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+
+  @@unique([coupon_id, restaurant_id])
+  @@index([coupon_id])
+  @@index([restaurant_id])
+  @@map("coupon_restaurants")
+}
